@@ -151,3 +151,112 @@ kubectl port-forward service/go-demo-2 3000:28017 --address 0.0.0.0
 # Exit the port-forward process by clicking Ctrl + C for Windows
 # Or Control + C for Mac before running the next command
 ```
+
+## Mise à jour de l'image db
+
+```bash
+kubectl set image -f go-demo-2-db.yml db=mongo:3.4
+
+kubectl describe -f go-demo-2-db.yml
+
+kubectl get all
+
+kubectl create -f go-demo-2-db-svc.yml
+```
+
+## Création d'un déploiement sans temps d'arrêt
+
+```bash
+kubectl create -f go-demo-2-api.yml --record
+
+kubectl get -f go-demo-2-api.yml
+
+kubectl set image -f go-demo-2-api.yml api=vfarcic/go-demo-2:2.0 --record
+
+kubectl rollout status -w -f go-demo-2-api.yml
+
+kubectl describe -f go-demo-2-api.yml
+
+kubectl rollout history -f go-demo-2-api.yml
+
+kubectl get rs
+```
+
+## Revenir en arrière ou avancer
+
+```bash
+kubectl rollout undo -f go-demo-2-api.yml
+
+kubectl describe -f go-demo-2-api.yml
+
+kubectl rollout history -f go-demo-2-api.yml
+```
+
+## Revenir à un moment précis dans le temps
+
+```bash
+kubectl set image -f go-demo-2-api.yml api=vfarcic/go-demo-2:3.0 --record
+
+kubectl rollout status -f go-demo-2-api.yml
+
+kubectl set image -f go-demo-2-api.yml api=vfarcic/go-demo-2:4.0 --record
+
+kubectl rollout status -f go-demo-2-api.yml
+
+kubectl rollout history -f go-demo-2-api.yml
+
+kubectl rollout undo -f go-demo-2-api.yml --to-revision=2
+
+kubectl rollout history -f go-demo-2-api.yml
+```
+
+## Annulation des déploiements ayant échoué
+
+```bash
+kubectl set image -f go-demo-2-api.yml api=vfarcic/go-demo-2:does-not-exist --record
+
+kubectl get rs -l type=api
+
+kubectl rollout status -f go-demo-2-api.yml
+
+echo $?
+
+kubectl rollout undo -f go-demo-2-api.yml
+
+kubectl rollout status -f go-demo-2-api.yml
+
+kubectl delete -f go-demo-2-db.yml
+
+kubectl delete -f go-demo-2-db-svc.yml
+
+kubectl delete -f go-demo-2-api.yml
+```
+
+## Mise à jour de plusieurs déploiements
+
+```bash
+kubectl create -f different-app-db.yml
+
+kubectl get deployments --show-labels
+
+kubectl get deployments -l type=db,vendor=MongoLabs
+
+kubectl set image deployments -l type=db,vendor=MongoLabs db=mongo:3.4 --record
+
+kubectl describe -f go-demo-2.yml
+```
+
+## Mise à l'échelle des déploiements
+
+```bash
+#wait a few seconds before executing the first command
+kubectl apply -f go-demo-2-scaled.yml
+
+kubectl get -f go-demo-2-scaled.yml
+
+kubectl scale deployment go-demo-2-api --replicas 8 --record
+
+kubectl get -f go-demo-2.yml
+
+k3d cluster delete mycluster --all
+```
