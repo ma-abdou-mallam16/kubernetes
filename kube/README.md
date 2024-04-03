@@ -500,3 +500,377 @@ kubectl port-forward service/jenkins 3000:8080 --address 0.0.0.0
 
 k3d cluster delete mycluster --all
 ```
+
+## Injection d'une configuration à partir d'un seul fichier
+
+```bash
+kubectl create cm my-config \
+    --from-file=prometheus-conf.yml
+
+kubectl describe cm my-config
+
+kubectl create -f alpine.yml
+kubectl get pods
+
+kubectl exec -it alpine -- \
+    ls /etc/config
+
+kubectl exec -it alpine --  \
+  ls -l /etc/config
+
+kubectl exec -it alpine -- \
+    cat /etc/config/prometheus-conf.yml
+
+kubectl delete -f alpine.yml
+
+kubectl delete cm my-config
+```
+
+## Injection de configurations à partir de plusieurs fichiers
+
+```bash
+kubectl create cm my-config \
+    --from-file=cm/prometheus-conf.yml \
+    --from-file=cm/prometheus.yml
+
+kubectl create -f cm/alpine.yml
+
+#Run the following command separately
+kubectl exec -it alpine -- \
+    ls /etc/config
+
+kubectl delete -f cm/alpine.yml
+#Run the following command separately to delete the configmap
+kubectl delete cm my-config
+
+kubectl create cm my-config \
+    --from-file=cm
+
+kubectl describe cm my-config
+
+kubectl create -f cm/alpine.yml
+#Run the below command separately after the "alpine" container is created
+kubectl exec -it alpine -- \
+    ls /etc/config
+
+kubectl delete -f cm/alpine.yml
+#Run the following command separately to delete the configmap
+kubectl delete cm my-config
+```
+
+## Injection de config à partir de littéraux clé/valeur
+
+```bash
+kubectl create cm my-config \
+    --from-literal=something=else \
+    --from-literal=weather=sunny
+
+kubectl get cm my-config -o yaml
+
+kubectl create -f alpine.yml
+#Wait a few seconds before executing the following command
+kubectl exec -it alpine -- \
+    ls /etc/config
+
+kubectl exec -it alpine -- \
+    cat /etc/config/something
+
+kubectl delete -f alpine.yml
+#Run the below command separately to the configMap
+kubectl delete cm my-config
+```
+
+## Injection de config à partir des fichiers d'environnement
+
+```bash
+kubectl create cm my-config \
+    --from-env-file=my-env-file.yml
+
+kubectl get cm my-config -o yaml
+```
+
+## Conversion de la sortie ConfigMap en variables d'environnement
+
+```bash
+kubectl create -f alpine-env.yml
+#Wait for a few seconds before executing the below command
+kubectl exec -it alpine-env -- env
+
+kubectl delete \
+    -f alpine-env.yml
+
+kubectl create \
+    -f alpine-env-all.yml
+
+kubectl exec -it alpine-env -- env
+```
+
+## Création de secrets génériques
+
+```bash
+kubectl create secret \
+    generic my-creds \
+    --from-literal=username=jdoe \
+    --from-literal=password=incognito
+
+kubectl get secrets
+
+kubectl get secret my-creds -o json
+
+kubectl get secret my-creds \
+    -o jsonpath="{.data.username}" \
+    | base64 --decode
+
+kubectl get secret my-creds \
+    -o jsonpath="{.data.password}" \
+    | base64 --decode
+```
+
+## Montage de secrets génériques
+
+```bash
+kubectl apply -f jenkins.yml
+
+kubectl rollout status deploy jenkins
+
+POD_NAME=$(kubectl get pods \
+    -l service=jenkins,type=master \
+    -o jsonpath="{.items[*].metadata.name}")
+
+kubectl exec -it $POD_NAME \
+    -- ls /etc/secrets
+
+kubectl exec -it $POD_NAME \
+    -- cat /etc/secrets/jenkins-user
+
+kubectl port-forward service/jenkins 3000:8080 --address 0.0.0.0
+
+k3d cluster delete mycluster --all
+```
+
+## Déploiement de la première version
+
+```bash
+#update image and create go-demo-2.yml
+IMG=vfarcic/go-demo-2
+
+TAG=1.0
+
+cat go-demo-2.yml \
+    | sed -e \
+    "s@image: $IMG@image: $IMG:$TAG@g" \
+    | kubectl create -f -
+
+# Rollout status of go-demo-2.yml
+kubectl rollout status \
+    deploy go-demo-2-api
+
+# Building connection and calling application
+nohup kubectl port-forward service/go-demo-2-api 3000:8080 --address 0.0.0.0 > /dev/null 2>&1 &
+
+# Please wait fpr a few second before running the following command:
+curl -H "Host: go-demo-2.com"  "http://0.0.0.0:3000/demo/hello"
+```
+
+## Explorer les namespaces
+
+```bash
+kubectl get ns
+
+kubectl --namespace kube-public get all
+
+kubectl --namespace kube-system get all
+```
+
+## Création d'un nouvel espace de noms
+
+```bash
+kubectl create ns testing
+
+kubectl get ns
+
+kubectl config set-context testing \
+    --namespace testing \
+    --cluster k3d-mycluster \
+    --user admin@k3d-mycluster
+
+kubectl config view
+
+kubectl config use-context testing
+
+kubectl get all
+```
+
+## Déploiement vers un nouvel espace de noms
+
+```bash
+IMG=vfarcic/go-demo-2
+
+TAG=2.0
+
+DOM=go-demo-2.com
+
+cat go-demo-2.yml \
+    | sed -e \
+    "s@image: $IMG@image: $IMG:$TAG@g" \
+    | sed -e \
+    "s@host: $DOM@host: $TAG\.$DOM@g" \
+    | kubectl create -f -
+
+kubectl rollout status \
+    deploy go-demo-2-api
+
+nohup kubectl port-forward -n ingress-nginx service/ingress-nginx-controller 3000:80 --address 0.0.0.0  > /dev/null 2>&1 &
+
+curl -H "Host: go-demo-2.com" "http://0.0.0.0:3000/demo/hello"
+
+curl -H "Host: 2.0.go-demo-2.com" "http://0.0.0.0:3000/demo/hello"
+```
+
+## Communication entre les namespaces
+
+```bash
+kubectl config use-context k3d-mycluster
+
+kubectl run test \
+    --image=alpine \
+    sleep 10000
+
+kubectl get pod test
+
+kubectl exec -it test \
+    -- apk add -U curl
+
+kubectl exec -it test -- curl \
+    "http://go-demo-2-api:8080/demo/hello"
+
+kubectl exec -it test -- curl \
+    "http://go-demo-2-api.testing:8080/demo/hello"
+```
+
+## Suppression de namespace et de tout ses objets
+
+```bash
+kubectl delete ns testing
+
+kubectl -n testing get all
+
+kubectl get all
+
+nohup kubectl port-forward service/go-demo-2-api 3000:8080 --address 0.0.0.0 > /dev/null 2>&1 &
+
+# Please wait fpr a few second before running the following command:
+curl -H "Host: go-demo-2.com" "http://0.0.0.0:3000/demo/hello"
+
+kubectl set image \
+    deployment/go-demo-2-api \
+    api=vfarcic/go-demo-2:2.0 \
+    --record
+
+k3d cluster delete mycluster --all
+```
+
+## Vérification du port sur lequel notre cluster s'exécute
+
+```bash
+kubectl config view \
+    -o jsonpath='{.clusters[?(@.name=="k3d-mycluster")].cluster.server}'
+
+ls usercode/certs
+```
+
+## Même cmdes de vérification du port pour minikube
+
+```bash
+# Get the port for minikube cluster
+kubectl config view \
+    -o jsonpath='{.clusters[?(@.name=="minikube")].cluster.server}'
+
+# Get the certificates for minikube cluster
+kubectl config view \
+    -o jsonpath='{.clusters[?(@.name=="minikube")].cluster.certificate-authority}'
+```
+
+## Créer des users pour accéder au cluster
+
+```bash
+mkdir keys
+openssl genrsa \
+    -out keys/jdoe.key 2048
+
+openssl req -new \
+    -key keys/jdoe.key \
+    -out keys/jdoe.csr \
+    -subj "/CN=jdoe/O=devs"
+
+ls -1 /usercode/certs/client-ca.*
+
+openssl x509 -req \
+    -in keys/jdoe.csr \
+    -CA /usercode/certs/client-ca.crt \
+    -CAkey /usercode/certs/client-ca.key \
+    -CAcreateserial \
+    -out keys/jdoe.crt \
+    -days 365
+
+cp /usercode/certs/server-ca.crt /usercode/certs/keys
+
+ls -1 keys
+
+SERVER=$(kubectl config view \
+    -o jsonpath='{.clusters[?(@.name=="k3d-mycluster")].cluster.server}')
+
+echo $SERVER
+```
+
+## Accès au cluster en tant que user
+
+```bash
+kubectl config set-cluster jdoe \
+    --certificate-authority \
+    /usercode/certs/keys/server-ca.crt \
+    --server $SERVER
+
+kubectl config set-credentials jdoe \
+    --client-certificate keys/jdoe.crt \
+    --client-key keys/jdoe.key
+
+kubectl config set-context jdoe \
+    --cluster jdoe \
+    --user jdoe
+
+kubectl config use-context jdoe
+
+kubectl config view
+
+kubectl get pods
+
+kubectl get all
+```
+
+## Explorer les clusterRoles prédéfinis
+
+```bash
+kubectl config use-context k3d-mycluster
+
+kubectl get all
+
+kubectl auth can-i get pods --as jdoe
+
+kubectl get roles
+
+kubectl get clusterroles
+
+kubectl get clusterroles | grep -v system
+
+kubectl describe clusterrole view
+
+kubectl describe clusterrole edit
+
+kubectl describe clusterrole admin
+
+kubectl describe clusterrole \
+    cluster-admin
+
+kubectl auth can-i "*" "*"
+```
