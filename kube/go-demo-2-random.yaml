@@ -21,13 +21,11 @@ spec:
         image: mongo:3.3
         resources:
           limits:
-            memory: "100Mi"
-            cpu: "0.1"
+            memory: 200Mi
+            cpu: "0.5"
           requests:
-            memory: "50Mi"
-            cpu: "0.01"
-        ports:
-        - containerPort: 27017
+            memory: 100Mi
+            cpu: "0.3"
 
 ---
 
@@ -49,7 +47,7 @@ kind: Deployment
 metadata:
   name: go-demo-2-api
 spec:
-  replicas: 15
+  replicas: 3
   selector:
     matchLabels:
       type: api
@@ -64,13 +62,6 @@ spec:
       containers:
       - name: api
         image: vfarcic/go-demo-2
-        resources:
-          limits:
-            memory: "10Mi"
-            cpu: "0.1"
-          requests:
-            memory: "5Mi"
-            cpu: "0.01"
         env:
         - name: DB
           value: go-demo-2-db
@@ -83,6 +74,36 @@ spec:
           httpGet:
             path: /demo/hello
             port: 8080
+        resources:
+          limits:
+            memory: 100Mi
+            cpu: 200m
+          requests:
+            memory: 50Mi
+            cpu: 100m
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: go-demo-2
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  rules:
+  - host: go-demo-2.com
+    http:
+      paths:
+      - path: /demo
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: go-demo-2-api
+            port:
+              number: 8080
 
 ---
 
@@ -91,7 +112,6 @@ kind: Service
 metadata:
   name: go-demo-2-api
 spec:
-  type: NodePort
   ports:
   - port: 8080
   selector:

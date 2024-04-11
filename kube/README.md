@@ -874,3 +874,246 @@ kubectl describe clusterrole \
 
 kubectl auth can-i "*" "*"
 ```
+
+## Création de RoleBindings
+
+```bash
+kubectl create rolebinding jdoe \
+    --clusterrole view \
+    --user jdoe \
+    --namespace default \
+    --save-config
+
+kubectl get rolebindings
+
+kubectl describe rolebinding jdoe
+
+kubectl --namespace kube-system \
+    describe rolebinding jdoe
+
+kubectl auth can-i get pods \
+    --as jdoe
+
+kubectl auth can-i get pods \
+    --as jdoe --all-namespaces
+
+kubectl delete rolebinding jdoe
+```
+
+## Création de cluster role bindings
+
+```bash
+kubectl create -f crb-view.yml \
+    --record --save-config
+
+kubectl describe clusterrolebinding \
+    view
+
+kubectl auth can-i get pods \
+    --as jdoe --all-namespaces
+```
+
+## Combinaison de roleBinding avec les namespaces
+
+```bash
+kubectl create -f rb-dev.yml \
+    --record --save-config
+
+kubectl --namespace dev auth can-i \
+    create deployments --as jdoe
+
+kubectl --namespace dev auth can-i \
+    delete deployments --as jdoe
+
+kubectl --namespace dev auth can-i \
+    "*" "*" --as jdoe
+
+kubectl create -f rb-jdoe.yml \
+    --record --save-config
+
+kubectl --namespace jdoe auth can-i \
+    "*" "*" --as jdoe
+```
+
+## Accès en tant que release manager
+
+```bash
+kubectl describe clusterrole admin
+
+kubectl create \
+    -f crb-release-manager.yml \
+    --record --save-config
+
+kubectl describe \
+    clusterrole release-manager
+
+kubectl --namespace default auth \
+    can-i "*" pods --as jdoe
+
+kubectl --namespace default auth \
+    can-i create deployments --as jdoe
+
+kubectl --namespace default auth can-i \
+    delete deployments --as jdoe
+
+kubectl config use-context jdoe
+
+kubectl --namespace default \
+     create deployment db \
+     --image mongo:3.3
+
+kubectl --namespace default \
+    delete deployment db
+
+kubectl config set-context jdoe \
+    --cluster jdoe \
+    --user jdoe \
+    --namespace jdoe
+
+kubectl config use-context jdoe
+
+kubectl create deployment db --image mongo:3.3
+
+kubectl delete deployment db
+
+kubectl create rolebinding mgandhi \
+    --clusterrole=view \
+    --user=mgandhi \
+    --namespace=jdoe
+```
+
+## Remplacement des utilisateurs par des groupes
+
+```bash
+openssl req -in /usercode/certs/keys/jdoe.csr \
+    -noout -subject
+
+kubectl config use-context k3d-mycluster
+
+kubectl apply -f groups.yml \
+    --record
+
+kubectl --namespace dev auth \
+    can-i create deployments --as jdoe
+
+kubectl config use-context jdoe
+
+kubectl --namespace dev \
+     create deployment new-db \
+     --image mongo:3.3
+
+k3d cluster delete mycluster --all
+```
+
+## Mesurer la mémoire et la consommation cpu réelles
+
+```bash
+kubectl --namespace kube-system \
+    get pods
+
+kubectl top pods
+```
+
+## Définition des valeurs par défaut et des limites de ressources dans un namespace
+
+```bash
+kubectl create ns test
+
+kubectl --namespace test create \
+    -f limit-range.yml \
+    --save-config --record
+
+kubectl describe namespace test
+
+kubectl --namespace test create \
+    -f go-demo-2-no-res.yml \
+    --save-config --record
+
+kubectl --namespace test \
+    rollout status \
+    deployment go-demo-2-api
+
+kubectl --namespace test describe \
+    pod go-demo-2-db
+```
+
+## Scénario Mismatch
+
+```bash
+kubectl create ns test
+
+kubectl --namespace test apply \
+    -f go-demo-2.yml \
+    --record
+
+kubectl --namespace test \
+    get events \
+    --watch
+
+kubectl delete namespace test
+```
+
+## Explorer les effets en violant les quotas
+
+```bash
+kubectl create \
+    -f dev.yml \
+    --record --save-config
+
+kubectl --namespace dev describe \
+    quota dev
+
+kubectl --namespace dev create \
+    -f go-demo-2.yml \
+    --save-config --record
+
+kubectl --namespace dev \
+    rollout status \
+    deployment go-demo-2-api
+
+kubectl --namespace dev describe \
+    quota dev
+
+kubectl --namespace dev apply \
+    -f go-demo-2-scaled.yml \
+    --record
+
+kubectl --namespace dev get events
+
+kubectl describe namespace dev
+
+kubectl get pods --namespace dev
+
+kubectl --namespace dev apply \
+    -f go-demo-2.yml \
+    --record
+
+kubectl --namespace dev \
+    rollout status \
+    deployment go-demo-2-api
+
+kubectl --namespace dev apply \
+    -f go-demo-2-mem.yml \
+    --record
+
+kubectl --namespace dev get events \
+    | grep mem
+
+kubectl describe namespace dev
+
+kubectl --namespace dev apply \
+    -f go-demo-2.yml \
+    --record
+
+kubectl --namespace dev \
+    rollout status \
+    deployment go-demo-2-api
+
+kubectl expose deployment go-demo-2-api \
+    --namespace dev \
+    --name go-demo-2-api \
+    --port 8080 \
+    --type NodePort
+
+k3d cluster delete mycluster --all
+```
